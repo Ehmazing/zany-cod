@@ -1,73 +1,61 @@
-#include "robot-config.h" // Include the VEX IQ robot configuration header
-#include <cmath> // Include cmath for mathematical functions like sqrt and atan2
+#include "vex.h"
 
-// Define the target locations in 2D space (x, y)
-struct Location {
-    double x; // Forward/Backward distance in mm
-    double y; // Left/Right distance in mm
-};
+using namespace vex;
 
-// Define the distances to the target locations
-const Location LOCATION_1 = {500.0, 300.0}; // Location 1 (x, y)
-const Location LOCATION_2 = {1000.0, 600.0}; // Location 2 (x, y)
+// Create a brain object
+brain Brain;
 
-// Function to move the robot to a specified location
-void moveToLocation(const Location& loc) {
-    vex::motor leftMotor(vex::PORT1);
-    vex::motor rightMotor(vex::PORT2);
-    
-    // Reset motor encoders
-    leftMotor.resetRotation();
-    rightMotor.resetRotation();
+// Create a distance sensor object on Port 2
+distance DistanceSensor = distance(Brain.ThreeWirePort.B); // Change to Port B for Port 2
 
-    // Calculate the distance to the target location
-    double distance = sqrt(loc.x * loc.x + loc.y * loc.y); // Pythagorean theorem
+// Create motor objects for the left and right wheels
+motor LeftMotor = motor(PORT1, ratio18_1, false);
+motor RightMotor = motor(PORT10, ratio18_1, true);
 
-    // Calculate the angle to turn (in degrees)
-    double angle = atan2(loc.y, loc.x) * (180.0 / M_PI); // Convert radians to degrees
+// Set the target distance in centimeters
+const double targetDistance = 50.0; // Change this to your desired distance
 
-    // Turn the robot to face the target location
-    leftMotor.setVelocity(50, vex::velocityUnits::pct);
-    rightMotor.setVelocity(50, vex::velocityUnits::pct);
-    
-    // Turn the robot to the calculated angle
-    if (angle > 0) {
-        leftMotor.startRotateFor(angle, vex::rotationUnits::deg);
-        rightMotor.startRotateFor(-angle, vex::rotationUnits::deg);
-    } else {
-        leftMotor.startRotateFor(angle, vex::rotationUnits::deg);
-        rightMotor.startRotateFor(-angle, vex::rotationUnits::deg);
-    }
-    vex::task::sleep(1000); // Wait for the turn to finish
-
-    // Move forward to the target location
-    leftMotor.startRotateFor(distance, vex::rotationUnits::mm);
-    rightMotor.startRotateFor(distance, vex::rotationUnits::mm);
-    vex::task::sleep(1000); // Wait for the motors to finish moving
-}
+// Create a controller object
+controller Controller;
 
 int main() {
-    // Initialize the controller
-    vex::controller Controller;
+    // Start the robot
+    Brain.Screen.print("Press L1 to Start...");
 
+    // Wait for the L1 button to be pressed
     while (true) {
-        // Check if button 1 (Button A) is pressed
-        if (Controller.ButtonA.pressing()) {
-            moveToLocation(LOCATION_1);
-            vex::brain::print("Moving to Location 1\n");
-            vex::task::sleep(500); // Debounce delay
+        if (Controller.ButtonL1.pressing()) {
+            Brain.Screen.clearScreen();
+            Brain.Screen.print("Starting...");
+
+            // Loop until the target distance is reached
+            while (true) {
+                // Get the current distance from the sensor
+                double currentDistance = DistanceSensor.distance(distanceUnits::cm);
+
+                // Print the current distance to the brain screen
+                Brain.Screen.clearScreen();
+                Brain.Screen.print("Current Distance: %.2f cm", currentDistance);
+
+                // Check if the current distance is less than the target distance
+                if (currentDistance < targetDistance) {
+                    // If not reached, turn the motors forward
+                    LeftMotor.spin(forward);
+                    RightMotor.spin(forward);
+                } else {
+                    // If reached, stop the motors
+                    LeftMotor.stop();
+                    RightMotor.stop();
+                    Brain.Screen.print("Target Distance Reached!");
+                    break; // Exit the loop
+                }
+
+                // Wait a short time to avoid overwhelming the CPU
+                task::sleep(100);
+            }
         }
 
-        // Check if button 2 (Button B) is pressed
-        if (Controller.ButtonB.pressing()) {
-            moveToLocation(LOCATION_2);
-            vex::brain::print("Moving to Location 2\n");
-            vex::task::sleep(500); // Debounce delay
-        }
-
-        // Optional: Add a small delay to avoid overwhelming the controller
-        vex::task::sleep(100);
+        // Allow a small delay to prevent overwhelming the CPU
+        task::sleep(100);
     }
-
-    return 0;
 }
